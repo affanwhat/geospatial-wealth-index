@@ -1,0 +1,25 @@
+# Quick run on the synthetic sample: `wi make-sample && wi train --config configs/sample.yaml`
+data:
+  path: data/sample/dataset.csv
+
+split:
+  scheme: spatial
+  test_size: 0.3
+  block_size_km: 5.0
+  cv_folds: 5
+
+features:
+  corr_threshold: 0.95
+  top_k: 15
+
+search:
+  n_iter: 10
+  param_distributions:
+    select__top_k: [10, 15, 20]
+    model__n_estimators: [100, 200]
+    model__max_depth: [10, 20, 30]
+    model__min_samples_split: [10, 20]
+    model__min_samples_leaf: [4, 8, 15]
+    model__max_features: [sqrt]
+
+output_dir: artifacts

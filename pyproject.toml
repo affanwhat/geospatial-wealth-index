@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wealth-index"
+version = "0.1.0"
+description = "Village-level wealth index prediction for the Jakarta Metropolitan Area from Sentinel-2, SDGSAT-1 and OpenStreetMap features"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scikit-learn>=1.6",
+    "matplotlib>=3.8",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "joblib>=1.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+# TPOT's `stopit` dependency imports pkg_resources, which setuptools>=81 no longer ships.
+tpot = ["tpot>=1.1", "setuptools<81"]
+
+[project.scripts]
+wi = "wealth_index.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wealth_index"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option", "pathlib.Path"]

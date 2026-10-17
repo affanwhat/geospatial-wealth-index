@@ -1,0 +1,27 @@
+# Quick TPOT run on the synthetic sample: `wi train --config configs/sample-tpot.yaml`
+data:
+  path: data/sample/dataset.csv
+
+split:
+  scheme: spatial
+  block_size_km: 5.0
+  cv_folds: 5
+
+features:
+  top_k: 15
+
+search:
+  method: tpot
+  param_distributions:
+    model__n_estimators: [100, 200]
+    model__max_depth: [10, 20, 30]
+    model__min_samples_split: [10, 20]
+    model__min_samples_leaf: [4, 8, 15]
+    model__max_features: [sqrt]
+  tpot:
+    search_space: rf
+    generations: 3
+    population_size: 10
+    max_time_mins: 10
+
+output_dir: artifacts
