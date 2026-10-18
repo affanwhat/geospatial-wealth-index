@@ -5,6 +5,7 @@ import pytest
 
 from wealth_index.config import TpotConfig
 from wealth_index.data import DataValidationError
+from wealth_index.model_card import build_model_card
 from wealth_index.predict import predict, resolve_model_path
 from wealth_index.report import build_html_report, collect_runs
 from wealth_index.train import train
@@ -39,6 +40,17 @@ def test_train_then_predict_end_to_end(small_config, sample_csv, tmp_path):
     out = predict(model_path, sample_csv, tmp_path / "preds.csv")
     assert len(out) == 300
     assert list(out.columns) == ["id", "wealth_index_pred"]
+
+    card = build_model_card(run_dir, tmp_path / "card.md", predictions=tmp_path / "preds.csv")
+    text = card.read_text("utf-8")
+    assert run_dir.name in text
+    assert f"{metrics['test']['tuned']['rmse']:.3f}" in text
+    assert "300 villages" in text and "## Limitations" in text
+
+
+def test_model_card_rejects_incomplete_run(tmp_path):
+    with pytest.raises(FileNotFoundError, match="metrics.json"):
+        build_model_card(tmp_path, tmp_path / "card.md")
 
 
 def test_tpot_search_produces_a_predicting_pipeline(small_config, sample_csv, tmp_path):

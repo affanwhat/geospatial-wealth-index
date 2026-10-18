@@ -87,6 +87,23 @@ def map_predictions(
         typer.echo(f"Wrote {vector}")
 
 
+@app.command("model-card")
+def model_card(
+    output: Path = typer.Option(Path("MODEL_CARD.md"), help="Markdown file to write."),
+    run: Path | None = typer.Option(None, help="Run directory; defaults to the latest run."),
+    artifacts_dir: Path = typer.Option(Path("artifacts")),
+    predictions: Path = typer.Option(Path("data/predictions/wealth_index.csv")),
+    map_png: Path = typer.Option(Path("data/predictions/wealth_index_map.png"), "--map"),
+) -> None:
+    """Write a model card for a training run, with predictions and map if they exist."""
+    from wealth_index.model_card import build_model_card
+    from wealth_index.predict import resolve_model_path
+
+    run_dir = run or resolve_model_path(artifacts_dir).parent
+    path = build_model_card(run_dir, output, predictions=predictions, map_png=map_png)
+    typer.echo(f"Wrote {path} for run {run_dir.name}")
+
+
 @app.command("export-runs")
 def export_runs(
     artifacts_dir: Path = typer.Option(Path("artifacts")),

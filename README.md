@@ -8,7 +8,7 @@ Based on my undergraduate thesis (Universitas Indonesia, 2025), rebuilt as a rep
 
 > **Status:** The pipeline has run end to end on real data: features extracted, model trained,
 > all 1,502 villages scored and mapped. Labels are the wealth index from the thesis, so
-> rebuilding it from Podes was skipped. The model card is next.
+> rebuilding it from Podes was skipped. See [MODEL_CARD.md](MODEL_CARD.md) for results.
 
 ## What the pipeline does
 
@@ -26,6 +26,8 @@ Based on my undergraduate thesis (Universitas Indonesia, 2025), rebuilt as a rep
   one prediction per village.
 - **Prediction maps.** `wi map` joins the predictions to the village polygons and draws a
   choropleth (PNG), optionally writing the joined polygons as a GeoPackage for QGIS.
+- **Model card.** `wi model-card` writes `MODEL_CARD.md` from a run's saved metrics, metadata and
+  feature importances, plus the predictions and map when they exist.
 - **Feature extraction (`wi features`).** Village polygons, OSM, Sentinel-2 and SDGSAT-1 become
   89 features per village (`configs/features.yaml`): POI kernel density, proximity and counts;
   road length, density and distance; spectral index statistics; GLCM texture; green exposure
@@ -70,6 +72,7 @@ wi labels join --labels data_inside/labels_podes.csv   # features + labels -> da
 wi train --config configs/train.yaml
 wi predict --input data/processed/features.csv         # -> data/predictions/wealth_index.csv
 wi map --vector data/predictions/wealth_index_map.gpkg # -> data/predictions/wealth_index_map.png
+wi model-card                                          # latest run -> MODEL_CARD.md
 ```
 
 ## Layout
@@ -94,4 +97,4 @@ OpenStreetMap data © OpenStreetMap contributors, ODbL. Sentinel-2 data: Coperni
 1. ~~Modeling pipeline~~
 2. ~~Feature extraction~~ (Sentinel-2 indices and texture, SDGSAT-1 NTL statistics, OSM POI/road features, zonal stats per village)
 3. ~~Wealth index construction from Podes 2024~~ (skipped: labels are the thesis's wealth index)
-4. ~~Training on real data, predictions, prediction maps~~; model card
+4. ~~Training on real data, predictions, prediction maps, model card~~
