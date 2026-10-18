@@ -62,6 +62,31 @@ def predict(
     typer.echo(f"Scored {len(out)} villages with {model_path} -> {output}")
 
 
+@app.command("map")
+def map_predictions(
+    predictions: Path = typer.Option(Path("data/predictions/wealth_index.csv")),
+    output: Path = typer.Option(Path("data/predictions/wealth_index_map.png")),
+    vector: Path | None = typer.Option(
+        None, help="Also write the joined polygons as a GeoPackage (e.g. for QGIS)."
+    ),
+    config: Path = typer.Option(
+        Path("configs/features.yaml"), help="Feature config; locates the village boundaries."
+    ),
+    id_col: str = typer.Option("id"),
+) -> None:
+    """Map predictions onto the village polygons (needs `pip install -e ".[geo]"`)."""
+    from wealth_index.geo.boundaries import read_villages
+    from wealth_index.geo.config import load_feature_config
+    from wealth_index.geo.maps import make_map
+
+    villages = read_villages(load_feature_config(config))
+    gdf = make_map(villages, predictions, output, id_col=id_col, vector=vector)
+    n = int(gdf["wealth_index_pred"].notna().sum())
+    typer.echo(f"Mapped {n} of {len(gdf)} villages -> {output}")
+    if vector:
+        typer.echo(f"Wrote {vector}")
+
+
 @app.command("export-runs")
 def export_runs(
     artifacts_dir: Path = typer.Option(Path("artifacts")),
