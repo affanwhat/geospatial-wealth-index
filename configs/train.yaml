@@ -13,6 +13,7 @@ split:
   cv_folds: 5
 
 features:
+  texture_pca: 0.95      # PCA over the TEX_* columns, fit per training fold (thesis: 95%); null disables
   corr_threshold: 0.95   # null disables the filter
   top_k: 25
   pfi_repeats: 5

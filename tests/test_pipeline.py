@@ -6,7 +6,7 @@ import pytest
 from wealth_index.config import TpotConfig
 from wealth_index.data import DataValidationError
 from wealth_index.predict import predict, resolve_model_path
-from wealth_index.report import collect_runs
+from wealth_index.report import build_html_report, collect_runs
 from wealth_index.train import train
 
 
@@ -30,6 +30,10 @@ def test_train_then_predict_end_to_end(small_config, sample_csv, tmp_path):
     assert len(tables["model_metrics"]) == 6  # 3 models x train/test
     assert {"lon", "lat", "residual"} <= set(tables["predictions"].columns)
     assert tables["feature_importance"]["selected"].sum() == len(metadata["selected_features"])
+
+    html = build_html_report(small_config.output_dir, tmp_path / "report.html").read_text("utf-8")
+    assert run_dir.name in html
+    assert "__REPORT_DATA__" not in html and "__GENERATED_AT__" not in html
 
     model_path = resolve_model_path(small_config.output_dir)
     out = predict(model_path, sample_csv, tmp_path / "preds.csv")

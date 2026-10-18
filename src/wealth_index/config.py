@@ -29,6 +29,8 @@ class SplitConfig:
 
 @dataclass
 class FeatureConfig:
+    # Share of texture (TEX_*) variance kept by a PCA step; None leaves the texture columns as is.
+    texture_pca: float | None = None
     corr_threshold: float | None = 0.95  # None disables the correlation filter
     top_k: int = 25
     pfi_repeats: int = 5

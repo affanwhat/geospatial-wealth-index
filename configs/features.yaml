@@ -1,0 +1,109 @@
+# Phase 2 feature build: `wi features all --config configs/features.yaml`
+# Spec: one row per village (KDEPUM), written to data/processed/features.csv.
+paths:
+  boundaries: data/spatial_data/subdistricts.json  # BIG 2019 village delineation, EPSG:4326
+  osm_pbf: data/raw/osm/java-250101.osm.pbf        # Geofabrik snapshot of 2025-01-01 (end of 2024)
+  s2_composite: data/raw/s2/s2_l2a_2024_median*.tif  # GEE export (may be split into tiles)
+  sdgsat: data/raw/sdgsat/**/*.tif                 # SDGSAT-1 GIU L4A scenes from CBAS
+  interim: data/interim
+  processed: data/processed
+
+crs: EPSG:32748          # WGS 84 / UTM 48S
+id_col: KDEPUM
+feature_set: curated     # curated (89 features) | superset (all index stats, texture on all bands)
+
+grid:
+  buffer_m: 2000
+  snap_m: 300
+  res_image: 10
+  res_kde: 100
+  res_distance: 30
+
+osm:
+  aoi_buffer_m: 10000
+  kde_radius_m: 1000     # the thesis' ArcGIS search radius is unknown (spec 8.5)
+  count_radii_km: [1, 5, 10]
+  buildings: false       # OSM building completeness varies with mapping effort (risk R3)
+  cpu_limit: null        # quackosm threads (null = all); lower it if extraction runs out of memory
+  clip_pbf: true         # cut the PBF to the study area before quackosm reads it (less memory)
+  # Reconstructed mapping of the thesis' nine POI categories (spec 8.6). A feature counts in
+  # every category whose filter it matches.
+  poi_categories:
+    Pub:
+      amenity: [townhall, community_centre, library, post_office, courthouse]
+      office: [government]
+    Cmer:
+      shop: true
+      amenity: [marketplace, restaurant, cafe, fast_food]
+      building: [retail, commercial]
+    Cmun:
+      man_made: [mast, communications_tower]
+      telecom: true
+      office: [telecommunication]
+    Edu:
+      amenity: [school, university, college, kindergarten]
+    Emr:
+      amenity: [police, fire_station]
+      emergency: [ambulance_station, assembly_point, siren]  # not emergency=*: that is also a road access tag
+    Fin:
+      amenity: [bank, atm, bureau_de_change]
+    HC:
+      amenity: [hospital, clinic, doctors, dentist, pharmacy]
+      healthcare: true
+    Pow:
+      power: [plant, substation, generator, tower]
+    Tra:
+      public_transport: [station, stop_position]
+      railway: [station, halt]
+      amenity: [bus_station]
+  road_classes:
+    Pri: [motorway, motorway_link, trunk, trunk_link, primary, primary_link]
+    Sec: [secondary, secondary_link]
+    Ter: [tertiary, tertiary_link]
+  road_drivable: [motorway, motorway_link, trunk, trunk_link, primary, primary_link, secondary,
+                  secondary_link, tertiary, tertiary_link, unclassified, residential, living_street,
+                  service, road]
+
+s2:
+  bands: [B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12]  # band order of the exported composite
+  scale: 1.0e-4
+  nodata: 0
+  ndbi_swir: B11         # standard NDBI; B12 reproduces the thesis text (spec 8.4)
+  gee:
+    project: null        # your Earth Engine cloud project id
+    start: "2024-01-01"
+    end: "2025-01-01"
+    max_cloud_pct: 60
+    cld_prb_thresh: 50
+    nir_drk_thresh: 0.15
+    cld_prj_dist_km: 1
+    buffer_m: 50
+    statistic: median    # median | mean
+    drive_folder: wealth_index
+    file_prefix: s2_l2a_2024_median
+
+texture:
+  bands: [B2, B4, B8]    # superset uses all s2 bands
+  levels: 32
+  percentiles: [2, 98]
+  distances: [1, 2]
+
+green:
+  settlement: ntl        # ntl | ndbi
+  threshold: 0
+  radius_m: 200
+
+ntl:
+  band: 1
+  nodata: null           # null: the file's nodata, else fill detected from the scene footprint
+  overlap: median        # median | first | latest
+  positive_threshold: 0
+  stripe:
+    enabled: true
+    direction: auto      # auto | vertical | horizontal
+    k: 3
+    min_run: 10
+    filter_width: 5
+
+build:
+  max_nan_share: 0.2

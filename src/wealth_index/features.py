@@ -7,12 +7,65 @@ every training fold and never sees validation or test rows.
 from __future__ import annotations
 
 import numpy as np
-from sklearn.base import BaseEstimator
+import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.feature_selection import SelectorMixin
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted, validate_data
+
+
+class TexturePCA(TransformerMixin, BaseEstimator):
+    """Replace the texture columns (`prefix`) by the principal components that explain
+    `variance` of them, as the thesis did with its texture bands.
+
+    Inside the Pipeline the PCA is fit on each training fold only. Needs DataFrame input;
+    returns the other columns unchanged, followed by TEXPC1..TEXPCk.
+    """
+
+    def __init__(self, prefix: str = "TEX_", variance: float = 0.95):
+        self.prefix = prefix
+        self.variance = variance
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("TexturePCA needs a DataFrame (use set_output(transform='pandas'))")
+        self.feature_names_in_ = np.asarray(X.columns, dtype=object)
+        self.n_features_in_ = X.shape[1]
+        self.texture_cols_ = [c for c in X.columns if str(c).startswith(self.prefix)]
+        self.pca_ = None
+        if self.texture_cols_:
+            self.pca_ = make_pipeline(
+                StandardScaler(), PCA(n_components=self.variance, svd_solver="full")
+            ).fit(X[self.texture_cols_])
+        return self
+
+    def _pc_names(self) -> list[str]:
+        n = 0 if self.pca_ is None else self.pca_[-1].n_components_
+        return [f"TEXPC{i + 1}" for i in range(n)]
+
+    def transform(self, X):
+        check_is_fitted(self, "texture_cols_")
+        X = (
+            pd.DataFrame(X, columns=self.feature_names_in_)
+            if not isinstance(X, pd.DataFrame)
+            else X
+        )
+        if self.pca_ is None:
+            return X
+        pcs = pd.DataFrame(
+            self.pca_.transform(X[self.texture_cols_]), columns=self._pc_names(), index=X.index
+        )
+        return pd.concat([X.drop(columns=self.texture_cols_), pcs], axis=1)
+
+    def get_feature_names_out(self, input_features=None):
+        check_is_fitted(self, "texture_cols_")
+        rest = [c for c in self.feature_names_in_ if c not in set(self.texture_cols_)]
+        return np.asarray(rest + self._pc_names(), dtype=object)
 
 
 class CorrelationFilter(SelectorMixin, BaseEstimator):

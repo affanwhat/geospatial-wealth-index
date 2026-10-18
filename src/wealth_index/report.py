@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
+from importlib import resources
 from pathlib import Path
 
 import pandas as pd
@@ -67,6 +69,30 @@ def collect_runs(artifacts_dir: str | Path) -> dict[str, pd.DataFrame]:
     for name in ("predictions", "feature_importance"):
         tables[name] = pd.concat(rows[name], ignore_index=True) if rows[name] else pd.DataFrame()
     return tables
+
+
+def build_html_report(artifacts_dir: str | Path, output: str | Path, decimals: int = 3) -> Path:
+    """Write a self-contained HTML dashboard of every run, with the run tables embedded."""
+    tables = collect_runs(artifacts_dir)
+    if tables["runs"].empty:
+        raise FileNotFoundError(f"No complete training runs found in {artifacts_dir}")
+    payload = {
+        "params": {"run": None},
+        "datasets": {
+            name: json.loads(df.round(decimals).to_json(orient="records"))
+            for name, df in tables.items()
+        },
+    }
+    # "</" inside the embedded JSON would end its <script> tag early.
+    data = json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
+    template = (resources.files("wealth_index") / "templates" / "report.html").read_text("utf-8")
+    html = template.replace("__REPORT_DATA__", data).replace(
+        "__GENERATED_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")
+    )
+    out = Path(output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    return out
 
 
 def export_runs(artifacts_dir: str | Path, out_dir: str | Path, decimals: int = 3) -> list[Path]:

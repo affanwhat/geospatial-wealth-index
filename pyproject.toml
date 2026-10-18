@@ -22,6 +22,21 @@ dependencies = [
 dev = ["pytest>=8.0", "ruff>=0.6"]
 # TPOT's `stopit` dependency imports pkg_resources, which setuptools>=81 no longer ships.
 tpot = ["tpot>=1.1", "setuptools<81"]
+# Phase 2 feature extraction (wi features ...).
+geo = [
+    "geopandas>=1.0",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "pyogrio>=0.9",
+    "pyarrow>=15",
+    "rasterio>=1.4",
+    "exactextract>=0.2",
+    "scipy>=1.11",
+    "scikit-image>=0.22",
+    "quackosm>=0.11",
+    "osmium>=4.0",
+    "earthengine-api>=1.0",
+]
 
 [project.scripts]
 wi = "wealth_index.cli:app"

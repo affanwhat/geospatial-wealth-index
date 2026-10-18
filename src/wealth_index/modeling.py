@@ -9,14 +9,20 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from wealth_index.config import FeatureConfig
-from wealth_index.features import CorrelationFilter, PermutationImportanceSelector
+from wealth_index.features import CorrelationFilter, PermutationImportanceSelector, TexturePCA
 
 
 def build_pipeline(features: FeatureConfig, seed: int) -> Pipeline:
-    """Impute -> drop collinear features -> keep top-k by PFI -> random forest."""
+    """Impute -> [texture PCA] -> drop collinear features -> keep top-k by PFI -> random forest."""
+    texture = (
+        [("texture_pca", TexturePCA(variance=features.texture_pca))]
+        if features.texture_pca is not None
+        else []
+    )
     return Pipeline(
         [
             ("impute", SimpleImputer(strategy="mean")),
+            *texture,
             ("corr", CorrelationFilter(threshold=features.corr_threshold)),
             (
                 "select",
