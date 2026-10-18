@@ -130,9 +130,12 @@ def compute_indices(bands: dict[str, np.ndarray], ndbi_swir: str = "B11") -> dic
 
         ndvi = ratio(nir - red, nir + red)
         ndbi = ratio(swir - nir, swir + nir)
+        evi = 2.5 * ratio(nir - red, nir + 6 * red - 7.5 * blue + 1)
         out = {
             "NDVI": ndvi,
-            "EVI": 2.5 * ratio(nir - red, nir + 6 * red - 7.5 * blue + 1),
+            # The EVI denominator crosses zero on blue-bright pixels (blue roofs, haze), where
+            # EVI runs off to +-infinity; outside [-1, 1] it carries no vegetation signal.
+            "EVI": np.where(np.abs(evi) <= 1, evi, np.nan),
             "SAVI": 1.5 * ratio(nir - red, nir + red + 0.5),
             "MSAVI": (2 * nir + 1 - np.sqrt((2 * nir + 1) ** 2 - 8 * (nir - red))) / 2,
             "TVI": np.sqrt(ndvi + 0.5),  # NaN where NDVI < -0.5

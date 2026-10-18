@@ -5,6 +5,7 @@ paths:
   osm_pbf: data/raw/osm/java-250101.osm.pbf        # Geofabrik snapshot of 2025-01-01 (end of 2024)
   s2_composite: data/raw/s2/s2_l2a_2024_median*.tif  # GEE export (may be split into tiles)
   sdgsat: data/raw/sdgsat/**/*.tif                 # SDGSAT-1 GIU L4A scenes from CBAS
+  viirs: data/raw/viirs/viirs_ntl.tif              # VIIRS fallback, fetched from GEE (ntl.source)
   interim: data/interim
   processed: data/processed
 
@@ -94,6 +95,18 @@ green:
   radius_m: 200
 
 ntl:
+  # sdgsat: SDGSAT-1 scenes from paths.sdgsat (thesis method).
+  # viirs: VIIRS DNB from GEE (uses s2.gee.project), downloaded to paths.viirs. ~460 m instead
+  #   of 40 m, so treat it as a stand-in. `wi features ntl` offers it when no scenes are found.
+  source: sdgsat
+  viirs:
+    collection: NOAA/VIIRS/DNB/ANNUAL_V22   # or NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG
+    band: average_masked                    # avg_rad for the monthly collection
+    coverage_band: cf_cvg
+    min_coverage: 1
+    start: "2024-01-01"
+    end: "2025-01-01"
+  # The settings below apply to SDGSAT-1 scenes only.
   band: 1
   nodata: null           # null: the file's nodata, else fill detected from the scene footprint
   overlap: median        # median | first | latest

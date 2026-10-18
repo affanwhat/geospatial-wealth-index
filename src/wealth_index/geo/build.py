@@ -42,6 +42,8 @@ def stage_inputs(cfg: FeatureBuildConfig, stage: str) -> list[Path]:
             return [Path(cfg.paths.osm_pbf), villages]
         case "s2" | "texture":
             return [*_globbed(cfg.paths.s2_composite), villages]
+        case "ntl" if cfg.ntl.source == "viirs":
+            return [Path(cfg.paths.viirs), villages]
         case "ntl":
             return [*_globbed(cfg.paths.sdgsat), villages]
         case "green":
@@ -70,12 +72,29 @@ def stage_params(cfg: FeatureBuildConfig, stage: str) -> dict:
 def _check_inputs(cfg: FeatureBuildConfig, stage: str) -> list[Path]:
     inputs = stage_inputs(cfg, stage)
     missing = [p for p in inputs if not p.exists()]
-    raw = {"s2": cfg.paths.s2_composite, "texture": cfg.paths.s2_composite, "ntl": cfg.paths.sdgsat}
+    raw = {"s2": cfg.paths.s2_composite, "texture": cfg.paths.s2_composite}
+    if cfg.ntl.source == "sdgsat":
+        raw["ntl"] = cfg.paths.sdgsat
     if stage in raw and not _globbed(raw[stage]):
         missing.append(Path(raw[stage]))
     if missing:
-        raise MissingInputError(f"Stage '{stage}' is missing inputs: {[str(p) for p in missing]}")
+        hint = " (or set ntl.source: viirs to use VIIRS from GEE)" if stage == "ntl" else ""
+        raise MissingInputError(
+            f"Stage '{stage}' is missing inputs: {[str(p) for p in missing]}{hint}"
+        )
     return inputs
+
+
+def _fetch_inputs(cfg: FeatureBuildConfig, stage: str) -> None:
+    """Download inputs that come from a service rather than from the user."""
+    if (
+        stage == "ntl"
+        and cfg.ntl.source == "viirs"
+        and (cfg.interim / "boundaries.parquet").exists()
+    ):
+        from wealth_index.geo.ntl import download_viirs
+
+        download_viirs(cfg, read_villages(cfg))  # no-op when the file matches the settings
 
 
 def stage_output(cfg: FeatureBuildConfig, stage: str) -> Path:
@@ -84,6 +103,7 @@ def stage_output(cfg: FeatureBuildConfig, stage: str) -> Path:
 
 def run_stage(cfg: FeatureBuildConfig, stage: str, force: bool = False) -> Path:
     """Run one stage unless its inputs and parameters match the last run's manifest."""
+    _fetch_inputs(cfg, stage)
     inputs = _check_inputs(cfg, stage)
     out, manifest_path = stage_output(cfg, stage), cfg.interim / f"{stage}.manifest.json"
     params = stage_params(cfg, stage)

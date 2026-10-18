@@ -54,7 +54,8 @@ wi features osm            # needs data/raw/osm/java-250101.osm.pbf (Geofabrik)
 wi features s2-export      # submits the cloud-masked 2024 composite on Google Earth Engine
 wi features s2             # after downloading the export into data/raw/s2/
 wi features texture
-wi features ntl            # needs SDGSAT-1 GIU scenes in data/raw/sdgsat/
+wi features ntl            # SDGSAT-1 GIU scenes in data/raw/sdgsat/; without them it offers
+                           # VIIRS (~460 m) from GEE instead (or set ntl.source: viirs)
 wi features green
 wi features build          # join + validate -> data/processed/features.csv
 wi features all            # every stage whose inputs exist, then build

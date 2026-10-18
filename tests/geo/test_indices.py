@@ -33,3 +33,9 @@ def test_division_by_zero_gives_nan():
     out = compute_indices(bands(b2=0.0, b4=0.0, b8=0.0, b11=0.0))
     assert np.isnan(out["NDVI"][0]) and np.isnan(out["GR"][0]) and np.isnan(out["NDBI"][0])
     assert np.isnan(out["NDBI_BIN"][0])  # no data stays no data, not "not built-up"
+
+
+def test_evi_blow_up_on_blue_bright_pixel_is_nan():
+    # Denominator 0.06 + 6*0.05 - 7.5*0.18 + 1 = 0.01, so raw EVI would be 2.5.
+    out = compute_indices(bands(b2=0.18, b4=0.05, b8=0.06, b11=0.1))
+    assert np.isnan(out["EVI"][0]) and out["NDVI"][0] == pytest.approx(0.01 / 0.11)

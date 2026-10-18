@@ -17,6 +17,7 @@ class PathsConfig:
     # Globs: GEE splits large exports into tiles, and SDGSAT comes as several scenes.
     s2_composite: str = "data/raw/s2/s2_l2a_2024_median*.tif"
     sdgsat: str = "data/raw/sdgsat/**/*.tif"
+    viirs: str = "data/raw/viirs/viirs_ntl.tif"  # downloaded from GEE when ntl.source is viirs
     interim: str = "data/interim"
     processed: str = "data/processed"
 
@@ -143,7 +144,21 @@ class StripeConfig:
 
 
 @dataclass
+class ViirsConfig:
+    """VIIRS DNB night lights from GEE: the fallback when there are no SDGSAT-1 scenes."""
+
+    collection: str = "NOAA/VIIRS/DNB/ANNUAL_V22"  # or NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG
+    band: str = "average_masked"  # background and fires removed; avg_rad for the monthly one
+    coverage_band: str | None = "cf_cvg"  # cloud-free observations; pixels below the min are NaN
+    min_coverage: int = 1
+    start: str = "2024-01-01"
+    end: str = "2025-01-01"  # exclusive; several images are combined by their median
+
+
+@dataclass
 class NtlConfig:
+    source: str = "sdgsat"  # sdgsat | viirs (~460 m, about 45x coarser than SDGSAT-1)
+    viirs: ViirsConfig = field(default_factory=ViirsConfig)
     band: int = 1
     nodata: float | None = None  # None: the file's own nodata, else fill found by footprint
     overlap: str = "median"  # median | first | latest (scenes sorted by file name)

@@ -112,6 +112,39 @@ def test_unchanged_stage_is_skipped_and_force_reruns(area):
     assert json.loads(manifest.read_text())["seconds"] >= 0
 
 
+def test_ntl_falls_back_to_viirs_when_configured(area, tmp_path, monkeypatch):
+    cfg = area
+    cfg.paths.sdgsat = str(tmp_path / "no_scenes" / "*.tif")
+    run_stage(cfg, "boundaries")
+    with pytest.raises(MissingInputError, match="ntl.source: viirs"):
+        run_stage(cfg, "ntl")
+
+    # Stand-in for the GEE download: ~460 m lon/lat pixels, dim west and bright east of the
+    # shared village edge.
+    lon, lat = Transformer.from_crs(UTM, "EPSG:4326", always_xy=True).transform(X0 + 1000, Y0 + 500)
+    calls = []
+
+    def fake_download(cfg, villages):
+        calls.append(1)
+        radiance = np.full((20, 20), 2.0, dtype="float32")
+        radiance[:, 10:] = 40
+        return write_raster(
+            Path(cfg.paths.viirs), radiance, lon - 10 / 240, lat + 10 / 240, 1 / 240, "EPSG:4326"
+        )
+
+    monkeypatch.setattr("wealth_index.geo.ntl.download_viirs", fake_download)
+    cfg.ntl.source = "viirs"
+    cfg.paths.viirs = str(tmp_path / "viirs" / "viirs_ntl.tif")
+    out = pd.read_parquet(run_stage(cfg, "ntl"))
+    assert calls  # fetched before the input check, so a missing file is not an error
+    assert out.notna().all().all()
+    west, east = out.loc["31.71.01.1001"], out.loc["31.71.01.1002"]
+    assert east["NTL_MEAN"] > west["NTL_MEAN"] + 10
+    manifest = json.loads((Path(cfg.paths.interim) / "ntl.manifest.json").read_text())
+    assert manifest["params"]["ntl"]["source"] == "viirs"
+    assert manifest["inputs"][0]["path"] == cfg.paths.viirs
+
+
 def test_validation_rejects_broken_tables():
     idx = pd.Index(["a", "b"])
     good = pd.DataFrame({"x": [1.0, 2.0], "y": [0.5, np.nan]}, index=idx)

@@ -1,4 +1,5 @@
-"""SDGSAT-1 GIU night-time lights: stripe correction, mosaic on the study grid, statistics.
+"""Night-time lights: SDGSAT-1 GIU scenes (stripe-corrected), or VIIRS DNB from GEE as a
+coarser fallback; mosaic on the study grid, then village statistics.
 
 Stripe correction reconstructs Wu et al. (2024): stripe pixels are replaced by the mean of
 their non-stripe 8-neighbours. Detection (not specified in the paper) flags pixels brighter
@@ -8,8 +9,11 @@ form runs of at least `min_run` pixels along the stripe, so single bright lights
 
 from __future__ import annotations
 
+import dataclasses
 import glob
+import json
 import logging
+import math
 import warnings
 from contextlib import ExitStack
 from pathlib import Path
@@ -19,6 +23,7 @@ import numpy as np
 import pandas as pd
 import rasterio
 from rasterio.enums import Resampling
+from rasterio.io import MemoryFile
 from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_bounds
 from rasterio.windows import Window, from_bounds
@@ -32,6 +37,7 @@ from wealth_index.geo.zonal import zonal
 log = logging.getLogger(__name__)
 
 NEIGHBOURS = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=float)
+NODATA = -9999  # GEE cannot send NaN for masked pixels; this marks them in the download
 
 
 def stripe_direction(img: np.ndarray) -> str:
@@ -187,6 +193,7 @@ def combine(stack: np.ndarray, how: str) -> np.ndarray:
 def write_mosaic(cfg: FeatureBuildConfig, scenes: list[Path], grid: Grid, out: Path) -> Path:
     """Three bands on the study grid: DN, DN where above the threshold (else NaN), and 1/0."""
     thr = cfg.ntl.positive_threshold
+    out.parent.mkdir(parents=True, exist_ok=True)
     with ExitStack() as stack:
         vrts = []
         for p in scenes:
@@ -241,6 +248,10 @@ def ntl_features(cfg: FeatureBuildConfig, villages: gpd.GeoDataFrame, mosaic: Pa
     return pd.DataFrame(feats)[ntl_columns(cfg)]
 
 
+def has_scenes(cfg: FeatureBuildConfig) -> bool:
+    return bool(glob.glob(cfg.paths.sdgsat, recursive=True))
+
+
 def scene_paths(cfg: FeatureBuildConfig) -> list[Path]:
     paths = sorted(Path(p) for p in glob.glob(cfg.paths.sdgsat, recursive=True))
     if not paths:
@@ -248,13 +259,88 @@ def scene_paths(cfg: FeatureBuildConfig) -> list[Path]:
     return paths
 
 
-def run(cfg: FeatureBuildConfig, villages: gpd.GeoDataFrame) -> pd.DataFrame:
+# --- VIIRS fallback from Google Earth Engine ------------------------------------------------
+
+
+def _study_grid(cfg: FeatureBuildConfig, villages: gpd.GeoDataFrame) -> Grid:
     g = cfg.grid
-    grid = study_grid(villages.total_bounds, g.res_image, g.buffer_m, g.snap_m, cfg.crs)
-    work = cfg.interim / "ntl_scenes"
-    corrected = [correct_scene(p, grid, cfg, work / f"{p.stem}.tif") for p in scene_paths(cfg)]
-    corrected = [p for p in corrected if p is not None]
-    if not corrected:
-        raise ValueError("No SDGSAT-1 scene covers the study area")
-    mosaic = write_mosaic(cfg, corrected, grid, cfg.interim / "rasters" / "ntl.tif")
+    return study_grid(villages.total_bounds, g.res_image, g.buffer_m, g.snap_m, cfg.crs)
+
+
+def download_viirs(cfg: FeatureBuildConfig, villages: gpd.GeoDataFrame) -> Path:
+    """VIIRS DNB radiance over the study area as float32 GeoTIFF (NaN = no data).
+
+    The area is a few hundred pixels across at ~460 m, so it comes straight back from GEE
+    (no Drive export). Pixels are kept on the product's own lon/lat grid; the mosaic step
+    resamples them like an SDGSAT scene. A sidecar JSON records the request, so changing
+    the VIIRS settings or the study area fetches again.
+    """
+    v, out = cfg.ntl.viirs, Path(cfg.paths.viirs)
+    bounds = transform_bounds(cfg.crs, "EPSG:4326", *_study_grid(cfg, villages).bounds)
+    request = {"viirs": dataclasses.asdict(v), "bounds": [round(b, 6) for b in bounds]}
+    sidecar = out.with_suffix(".json")
+    if out.exists() and sidecar.exists() and json.loads(sidecar.read_text()) == request:
+        return out
+
+    import ee
+
+    ee.Initialize(project=cfg.s2.gee.project)
+    images = ee.ImageCollection(v.collection).filterDate(v.start, v.end)
+    if images.size().getInfo() == 0:
+        raise ValueError(f"{v.collection} has no images between {v.start} and {v.end}")
+
+    def masked(img):
+        band = img.select(v.band)
+        if v.coverage_band:
+            band = band.updateMask(img.select(v.coverage_band).gte(v.min_coverage))
+        return band
+
+    image = images.map(masked).median().rename("NTL").toFloat()
+    # Snap the request to the product's pixel grid, so GEE does not resample.
+    sx, _, x0, _, sy, y0 = images.first().select(v.band).projection().getInfo()["transform"]
+    west, south, east, north = bounds
+    col0, col1 = math.floor((west - x0) / sx), math.ceil((east - x0) / sx)
+    row0, row1 = math.floor((north - y0) / sy), math.ceil((south - y0) / sy)
+    log.info("Fetching %s (%dx%d px) from GEE", v.collection, col1 - col0, row1 - row0)
+    data = ee.data.computePixels(
+        {
+            "expression": image.unmask(NODATA),
+            "fileFormat": "GEO_TIFF",
+            "grid": {
+                "dimensions": {"width": col1 - col0, "height": row1 - row0},
+                "affineTransform": {
+                    "scaleX": sx,
+                    "shearX": 0,
+                    "translateX": x0 + col0 * sx,
+                    "shearY": 0,
+                    "scaleY": sy,
+                    "translateY": y0 + row0 * sy,
+                },
+                "crsCode": "EPSG:4326",
+            },
+        }
+    )
+    with MemoryFile(data) as mem, mem.open() as src:
+        arr = src.read(1).astype("float32")
+        arr[arr == NODATA] = np.nan
+        prof = src.profile | {"dtype": "float32", "nodata": np.nan, "compress": "deflate"}
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(out, "w", **prof) as dst:
+        dst.write(arr, 1)
+        dst.set_band_description(1, f"{v.collection}:{v.band} {v.start}..{v.end}")
+    sidecar.write_text(json.dumps(request, indent=2))
+    return out
+
+
+def run(cfg: FeatureBuildConfig, villages: gpd.GeoDataFrame) -> pd.DataFrame:
+    grid = _study_grid(cfg, villages)
+    if cfg.ntl.source == "viirs":
+        scenes = [download_viirs(cfg, villages)]  # already masked; VIIRS has no stripes
+    else:
+        work = cfg.interim / "ntl_scenes"
+        scenes = [correct_scene(p, grid, cfg, work / f"{p.stem}.tif") for p in scene_paths(cfg)]
+        scenes = [p for p in scenes if p is not None]
+        if not scenes:
+            raise ValueError("No SDGSAT-1 scene covers the study area")
+    mosaic = write_mosaic(cfg, scenes, grid, cfg.interim / "rasters" / "ntl.tif")
     return ntl_features(cfg, villages, mosaic)

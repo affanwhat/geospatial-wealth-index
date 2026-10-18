@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 
 import typer
@@ -100,9 +101,25 @@ STAGE_HELP = {
     "osm": "POI and road features from the OSM extract.",
     "s2": "Spectral index statistics from the Sentinel-2 composite.",
     "texture": "GLCM texture per village from the Sentinel-2 composite.",
-    "ntl": "Destriped SDGSAT-1 night-time light mosaic and statistics.",
+    "ntl": "Night-time light statistics: destriped SDGSAT-1, or VIIRS from GEE as a fallback.",
     "green": "Green exposure around settlements (needs s2 and ntl).",
 }
+
+
+def _offer_viirs(cfg) -> None:
+    """With no SDGSAT-1 scenes, ask whether to use VIIRS night lights from GEE instead."""
+    from wealth_index.geo.ntl import has_scenes
+
+    if cfg.ntl.source != "sdgsat" or has_scenes(cfg) or not sys.stdin.isatty():
+        return
+    if typer.confirm(
+        f"No SDGSAT-1 scenes match {cfg.paths.sdgsat}.\n"
+        "Use VIIRS night lights from Google Earth Engine instead? They are ~460 m, much "
+        "coarser than SDGSAT-1's 40 m, so NTL features become a stand-in",
+        default=False,
+    ):
+        cfg.ntl.source = "viirs"
+        typer.echo("Using VIIRS. Set `ntl.source: viirs` in the config to skip this question.")
 
 
 def _stage_command(stage: str):
@@ -110,7 +127,10 @@ def _stage_command(stage: str):
         from wealth_index.geo.build import run_stage
         from wealth_index.geo.config import load_feature_config
 
-        typer.echo(f"Stage {stage}: {run_stage(load_feature_config(config), stage, force=force)}")
+        cfg = load_feature_config(config)
+        if stage == "ntl":
+            _offer_viirs(cfg)
+        typer.echo(f"Stage {stage}: {run_stage(cfg, stage, force=force)}")
 
     command.__doc__ = STAGE_HELP[stage]
     return command
@@ -151,7 +171,9 @@ def features_all(config: Path = FEATURES_CONFIG, force: bool = FORCE) -> None:
     from wealth_index.geo.build import run_all
     from wealth_index.geo.config import load_feature_config
 
-    typer.echo(f"Wrote {run_all(load_feature_config(config), force=force)}")
+    cfg = load_feature_config(config)
+    _offer_viirs(cfg)
+    typer.echo(f"Wrote {run_all(cfg, force=force)}")
 
 
 if __name__ == "__main__":
