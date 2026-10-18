@@ -71,6 +71,7 @@ def area(tmp_path):
             processed=str(tmp_path / "processed"),
         )
     )
+    cfg.ntl.band = 1  # the synthetic scene is single-band
     return cfg
 
 

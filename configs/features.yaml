@@ -4,7 +4,7 @@ paths:
   boundaries: data/spatial_data/subdistricts.json  # BIG 2019 village delineation, EPSG:4326
   osm_pbf: data/raw/osm/java-250101.osm.pbf        # Geofabrik snapshot of 2025-01-01 (end of 2024)
   s2_composite: data/raw/s2/s2_l2a_2024_median*.tif  # GEE export (may be split into tiles)
-  sdgsat: data/raw/sdgsat/**/*.tif                 # SDGSAT-1 GIU L4A scenes from CBAS
+  sdgsat: data/raw/sdgsat/**/*_LH.tif              # SDGSAT-1 GIU L4A panchromatic scenes from CBAS (not *_RGB)
   viirs: data/raw/viirs/viirs_ntl.tif              # VIIRS fallback, fetched from GEE (ntl.source)
   interim: data/interim
   processed: data/processed
@@ -91,13 +91,13 @@ texture:
 
 green:
   settlement: ntl        # ntl | ndbi
-  threshold: 0
+  threshold: 1           # NTL DN above this (dark land is 1); use 0 with ndbi
   radius_m: 200
 
 ntl:
   # sdgsat: SDGSAT-1 scenes from paths.sdgsat (thesis method).
   # viirs: VIIRS DNB from GEE (uses s2.gee.project), downloaded to paths.viirs. ~460 m instead
-  #   of 40 m, so treat it as a stand-in. `wi features ntl` offers it when no scenes are found.
+  #   of 10 m, so treat it as a stand-in. `wi features ntl` offers it when no scenes are found.
   source: sdgsat
   viirs:
     collection: NOAA/VIIRS/DNB/ANNUAL_V22   # or NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG
@@ -107,10 +107,10 @@ ntl:
     start: "2024-01-01"
     end: "2025-01-01"
   # The settings below apply to SDGSAT-1 scenes only.
-  band: 1
+  band: 3                # *_LH.tif: 1 PL (low gain), 2 PH (high gain), 3 HDR (merged)
   nodata: null           # null: the file's nodata, else fill detected from the scene footprint
   overlap: median        # median | first | latest
-  positive_threshold: 0
+  positive_threshold: 1  # dark land is DN 1; the thesis counted pixels "above 1"
   stripe:
     enabled: true
     direction: auto      # auto | vertical | horizontal

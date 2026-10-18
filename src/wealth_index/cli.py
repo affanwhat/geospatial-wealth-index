@@ -141,7 +141,7 @@ def _offer_viirs(cfg) -> None:
     if typer.confirm(
         f"No SDGSAT-1 scenes match {cfg.paths.sdgsat}.\n"
         "Use VIIRS night lights from Google Earth Engine instead? They are ~460 m, much "
-        "coarser than SDGSAT-1's 40 m, so NTL features become a stand-in",
+        "coarser than SDGSAT-1's 10 m, so NTL features become a stand-in",
         default=False,
     ):
         cfg.ntl.source = "viirs"

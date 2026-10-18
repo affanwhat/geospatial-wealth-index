@@ -16,7 +16,7 @@ class PathsConfig:
     osm_pbf: str = "data/raw/osm/java-250101.osm.pbf"
     # Globs: GEE splits large exports into tiles, and SDGSAT comes as several scenes.
     s2_composite: str = "data/raw/s2/s2_l2a_2024_median*.tif"
-    sdgsat: str = "data/raw/sdgsat/**/*.tif"
+    sdgsat: str = "data/raw/sdgsat/**/*_LH.tif"
     viirs: str = "data/raw/viirs/viirs_ntl.tif"  # downloaded from GEE when ntl.source is viirs
     interim: str = "data/interim"
     processed: str = "data/processed"
@@ -130,7 +130,7 @@ class TextureConfig:
 @dataclass
 class GreenConfig:
     settlement: str = "ntl"  # ntl | ndbi
-    threshold: float = 0  # settlement where NTL (or NDBI) is above this
+    threshold: float = 1  # settlement where NTL is above this (dark is DN 1); use 0 for NDBI
     radius_m: float = 200
 
 
@@ -159,10 +159,10 @@ class ViirsConfig:
 class NtlConfig:
     source: str = "sdgsat"  # sdgsat | viirs (~460 m, about 45x coarser than SDGSAT-1)
     viirs: ViirsConfig = field(default_factory=ViirsConfig)
-    band: int = 1
+    band: int = 3  # L4A *_LH.tif bands: 1 PL (low gain), 2 PH (high gain), 3 HDR (merged)
     nodata: float | None = None  # None: the file's own nodata, else fill found by footprint
     overlap: str = "median"  # median | first | latest (scenes sorted by file name)
-    positive_threshold: float = 0  # NTLPos_* and NTLBin_Ratio use DN > this
+    positive_threshold: float = 1  # NTLPos_* and NTLBin_Ratio use DN > this; dark land is DN 1
     stripe: StripeConfig = field(default_factory=StripeConfig)
 
 
