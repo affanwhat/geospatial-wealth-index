@@ -85,6 +85,32 @@ def report(
     typer.echo(f"Wrote {build_html_report(artifacts_dir, output)}")
 
 
+labels_app = typer.Typer(help="Phase 3: wealth index labels.", no_args_is_help=True)
+app.add_typer(labels_app, name="labels")
+
+
+@labels_app.command("join")
+def labels_join(
+    labels: Path = typer.Option(..., help="CSV with a village id and a wealth index column."),
+    features: Path = typer.Option(
+        Path("data/processed/features.csv"), help="From `wi features build`."
+    ),
+    output: Path = typer.Option(
+        Path("data/processed/dataset.csv"), help="Training dataset to write."
+    ),
+    label_col: str = typer.Option("wi", help="Wealth index column in the labels file."),
+    label_id_col: str = typer.Option("KDEPUM", help="Village id column in the labels file."),
+) -> None:
+    """Join labels to the feature table into the dataset `wi train` reads."""
+    from wealth_index.labels import run_join
+
+    report = run_join(features, labels, output, label_col=label_col, label_id_col=label_id_col)
+    typer.echo(
+        f"Wrote {output}: {report.matched} of {report.features} villages labelled"
+        f" ({len(report.unlabelled)} without a label, {len(report.unknown)} unknown label ids)"
+    )
+
+
 features_app = typer.Typer(
     help='Phase 2: build village features from raw geodata (needs `pip install -e ".[geo]"`).',
     no_args_is_help=True,
