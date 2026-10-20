@@ -12,3 +12,6 @@ data_inside/
 
 # Training outputs
 artifacts/
+
+# Experiment outputs (Podes-derived)
+experiments/output/

@@ -68,6 +68,7 @@ wi features all            # every stage whose inputs exist, then build
 Real data, from features to map (also needs the `geo` extra):
 
 ```bash
+python scripts/podes_labels.py                         # thesis WI -> data_inside/labels_podes.csv
 wi labels join --labels data_inside/labels_podes.csv   # features + labels -> data/processed/dataset.csv
 wi train --config configs/train.yaml
 wi predict --input data/processed/features.csv         # -> data/predictions/wealth_index.csv
@@ -82,6 +83,8 @@ configs/            training configs (real data, synthetic sample)
 src/wealth_index/   data validation, spatial blocking, selectors, training, prediction, CLI
 src/wealth_index/geo/  feature extraction (boundaries, OSM, Sentinel-2, texture, NTL, build), prediction maps
 tests/              unit + end-to-end tests on synthetic data (tests/geo: small known-answer fixtures)
+scripts/            data preparation outside the package (labels from the thesis' WI)
+experiments/        error analysis and model comparisons on a training run (see experiments/README.md)
 notebooks/          original thesis notebook (exploration record)
 ```
 
